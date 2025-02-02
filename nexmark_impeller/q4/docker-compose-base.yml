@@ -1,0 +1,199 @@
+version: "3.8"
+services:
+  faas-engine:
+    image: ubuntu:focal
+    hostname: faas-engine-{{.Task.Slot}}
+    entrypoint:
+      - /faas/bin/${FAAS_BUILD_TYPE:-release}/engine
+      - --zookeeper_host=zookeeper:2181
+      - --listen_iface=eth0
+      - --root_path_for_ipc=/tmp/faas/ipc
+      - --func_config_file=/exp/nexmark_sharedlog/specs/q4.json
+      - --num_io_workers=4
+      - --socket_listen_backlog=1024
+      - --instant_rps_p_norm=0.8
+      # - --disable_concurrency_limiter
+      - --io_uring_entries=2048
+      - --io_uring_fd_slots=4096
+      - --enable_shared_log
+      - --slog_engine_enable_cache
+      - --slog_engine_cache_cap_mb=1024
+      - --slog_engine_propagate_auxdata
+      # - --slog_enable_statecheck
+      # - --slog_statecheck_interval_sec=10
+      # - --log_path=/tmp/log/engine.log
+      # - --alsologtostderr
+      # - --v=1
+    depends_on:
+      - zookeeper-setup
+    volumes:
+      - ${FAAS_DIR:?}:/faas
+      - ${EXP_DIR:?}:/exp
+      - /mnt/inmem/faas:/tmp/faas
+      - /mnt/inmem/log:/tmp/log
+      - /sys/fs/cgroup:/tmp/root_cgroupfs
+    environment:
+      - FAAS_NODE_ID={{.Task.Slot}}
+      - FAAS_CGROUP_FS_ROOT=/tmp/root_cgroupfs
+    restart: always
+
+  faas-gateway:
+    image: ubuntu:focal
+    hostname: faas-gateway
+    ports:
+      - 8080:8080
+    entrypoint:
+      - /faas/bin/${FAAS_BUILD_TYPE:-release}/gateway
+      - --zookeeper_host=zookeeper:2181
+      - --listen_iface=eth0
+      - --http_port=8080
+      - --func_config_file=/exp/nexmark_sharedlog/specs/q4_gateway.json
+      - --num_io_workers=8
+      - --socket_listen_backlog=1024
+      - --io_uring_entries=2048
+      - --io_uring_fd_slots=4096
+      - --lb_per_fn_round_robin
+      # - --lb_pick_least_load
+      # - --max_running_requests=16
+      - --max_running_requests=0
+      # - --v=1
+    depends_on:
+      - zookeeper-setup
+    volumes:
+      - ${FAAS_DIR:?}:/faas
+      - ${EXP_DIR:?}:/exp
+      - /mnt/inmem:/tmp
+    restart: always
+
+  nexmark-source:
+    image: ubuntu:focal
+    entrypoint: ["/faas/tmp/run_basic_go", "/src/bin/nexmark_handler", "60"]
+    volumes:
+      - ${SRC_DIR:?}:/src
+      - ${FAAS_DIR:?}:/faas
+      - /mnt/inmem/faas:/tmp/faas
+    environment:
+       - FAAS_BUILD_TYPE=${FAAS_BUILD_TYPE:-release}
+       - FAAS_GO_MAX_PROC_FACTOR=1
+       - GOGC=200
+         # - MEASURE_PROC=1
+       - MEASURE_SRC=1
+       - MEASURE_SINK=1
+       - BUFPUSH=1
+       - REDIS_ADDR=snapcache-1:6666,snapcache-2:6666,snapcache-3:6666,snapcache-4:6666
+       - RTXN_MNGR_ADDR=remoteTxnMngr-1:5050,remoteTxnMngr-2:5050,remoteTxnMngr-3:5050,remoteTxnMngr-4:5050
+       - CHKPT_MNGR_ADDR=chkptmngr_server:6060
+    depends_on:
+       - faas-engine
+       - snapcache
+       - remoteTxnMngr
+    restart: always
+
+  q46GroupBy:
+    image: ubuntu:focal
+    entrypoint: ["/faas/tmp/run_basic_go", "/src/bin/nexmark_handler", "70"]
+    volumes:
+      - ${SRC_DIR:?}:/src
+      - ${FAAS_DIR:?}:/faas
+      - /mnt/inmem/faas:/tmp/faas
+    environment:
+       - FAAS_BUILD_TYPE=${FAAS_BUILD_TYPE:-release}
+       - FAAS_GO_MAX_PROC_FACTOR=1
+       - GOGC=200
+         # - MEASURE_PROC=1
+       - MEASURE_SRC=1
+       - MEASURE_SINK=1
+       - BUFPUSH=1
+       - ASYNC_SECOND_PHASE=1
+       - REDIS_ADDR=snapcache-1:6666,snapcache-2:6666,snapcache-3:6666,snapcache-4:6666
+       - RTXN_MNGR_ADDR=remoteTxnMngr-1:5050,remoteTxnMngr-2:5050,remoteTxnMngr-3:5050,remoteTxnMngr-4:5050
+       - CHKPT_MNGR_ADDR=chkptmngr_server:6060
+    depends_on:
+       - faas-engine
+       - snapcache
+       - remoteTxnMngr
+    restart: always
+
+  q4JoinStream:
+    image: ubuntu:focal
+    entrypoint: ["/faas/tmp/run_basic_go", "/src/bin/nexmark_handler", "80"]
+    volumes:
+      - ${SRC_DIR:?}:/src
+      - ${FAAS_DIR:?}:/faas
+      - /mnt/inmem/faas:/tmp/faas
+    environment:
+       - FAAS_BUILD_TYPE=${FAAS_BUILD_TYPE:-release}
+       - FAAS_GO_MAX_PROC_FACTOR=1
+       - GOGC=200
+         # - MEASURE_PROC=1
+       - MEASURE_SRC=1
+       - MEASURE_SINK=1
+       - BUFPUSH=1
+       - USE_CACHE=1
+       - PARALLEL_RESTORE=1
+       - CREATE_SNAPSHOT=1
+       - REDIS_ADDR=snapcache-1:6666,snapcache-2:6666,snapcache-3:6666,snapcache-4:6666
+       - ASYNC_SECOND_PHASE=1
+       - RTXN_MNGR_ADDR=remoteTxnMngr-1:5050,remoteTxnMngr-2:5050,remoteTxnMngr-3:5050,remoteTxnMngr-4:5050
+       - CHKPT_MNGR_ADDR=chkptmngr_server:6060
+    depends_on:
+       - faas-engine
+       - snapcache
+       - remoteTxnMngr
+    restart: always
+
+  q4MaxBid:
+    image: ubuntu:focal
+    entrypoint: ["/faas/tmp/run_basic_go", "/src/bin/nexmark_handler", "90"]
+    volumes:
+      - ${SRC_DIR:?}:/src
+      - ${FAAS_DIR:?}:/faas
+      - /mnt/inmem/faas:/tmp/faas
+    environment:
+       - FAAS_BUILD_TYPE=${FAAS_BUILD_TYPE:-release}
+       - FAAS_GO_MAX_PROC_FACTOR=1
+       - GOGC=200
+         # - MEASURE_PROC=1
+       - MEASURE_SRC=1
+       - MEASURE_SINK=1
+       - BUFPUSH=1
+       - USE_CACHE=1
+       - PARALLEL_RESTORE=1
+       - CREATE_SNAPSHOT=1
+       - REDIS_ADDR=snapcache-1:6666,snapcache-2:6666,snapcache-3:6666,snapcache-4:6666
+       - ASYNC_SECOND_PHASE=1
+       - RTXN_MNGR_ADDR=remoteTxnMngr-1:5050,remoteTxnMngr-2:5050,remoteTxnMngr-3:5050,remoteTxnMngr-4:5050
+       - CHKPT_MNGR_ADDR=chkptmngr_server:6060
+    depends_on:
+       - faas-engine
+       - snapcache
+       - remoteTxnMngr
+    restart: always
+
+  q4Avg:
+    image: ubuntu:focal
+    entrypoint: ["/faas/tmp/run_basic_go", "/src/bin/nexmark_handler", "100"]
+    volumes:
+      - ${SRC_DIR:?}:/src
+      - ${FAAS_DIR:?}:/faas
+      - /mnt/inmem/faas:/tmp/faas
+    environment:
+       - FAAS_BUILD_TYPE=${FAAS_BUILD_TYPE:-release}
+       - FAAS_GO_MAX_PROC_FACTOR=1
+       - GOGC=200
+         # - MEASURE_PROC=1
+       - MEASURE_SRC=1
+       - MEASURE_SINK=1
+       - BUFPUSH=1
+       - USE_CACHE=1
+       - PARALLEL_RESTORE=1
+       - CREATE_SNAPSHOT=1
+       - REDIS_ADDR=snapcache-1:6666,snapcache-2:6666,snapcache-3:6666,snapcache-4:6666
+       - ASYNC_SECOND_PHASE=1
+       - RTXN_MNGR_ADDR=remoteTxnMngr-1:5050,remoteTxnMngr-2:5050,remoteTxnMngr-3:5050,remoteTxnMngr-4:5050
+       - CHKPT_MNGR_ADDR=chkptmngr_server:6060
+    depends_on:
+       - faas-engine
+       - snapcache
+       - remoteTxnMngr
+    restart: always
