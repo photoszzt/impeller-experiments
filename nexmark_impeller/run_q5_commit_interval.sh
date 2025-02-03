@@ -1,38 +1,37 @@
 #!/bin/bash
 set -x
-
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 WORKSPACE_DIR=$(realpath $SCRIPT_DIR/../../)
-DIR="$SCRIPT_DIR/q8/mem"
+DIR="$SCRIPT_DIR/q5/mem"
 
 cd "$DIR"
 $WORKSPACE_DIR/research-helper-scripts/microservice_helper start-machines --use-spot-instances
 ./update_docker.sh
 cd "$SCRIPT_DIR"
 
-TPS_PER_WORKER=(4000 8000 12000 16000 20000 24000 28000 32000 36000)
+TPS_PER_WORKER=32000
 NUM_WORKER=4
 DURATION=180
 WARM_DURATION=0
-APP=q8
-FLUSH_MS=100
-SRC_FLUSH_MS=${FLUSH_MS}
+APP=q5
+SRC_FLUSH_MS=(10 25 50 100)
 SNAPSHOT_S=10
-COMM_EVERY_MS=100
-modes=(epoch 2pc align_chkpt)
+modes=(epoch remote_2pc)
 
 cd ${DIR}
-for ((idx = 0; idx < ${#TPS_PER_WORKER[@]}; ++idx)); do
-	TPS=$(expr ${TPS_PER_WORKER[idx]} \* ${NUM_WORKER})
+for ((s = 0; s < ${#SRC_FLUSH_MS[@]}; ++s)); do
+	FLUSH_MS=${SRC_FLUSH_MS[$s]}
+	COMM_EVERY_MS=${SRC_FLUSH_MS[$s]}
+	TPS=$(expr ${TPS_PER_WORKER} \* ${NUM_WORKER})
 	EVENTS=$(expr $TPS \* $DURATION)
-	echo ${APP}, ${DIR}, ${EVENTS} events, ${TPS} tps
-	subdir=${DURATION}s_${WARM_DURATION}swarm_${FLUSH_MS[j]}ms_src${SRC_FLUSH_MS}ms
+	echo ${APP}, ${DIR}, ${EVENTS} events, ${TPS} tps, $FLUSH_MS flush_ms, ${SRC_FLUSH_MS[$s]} srcflush_ms, $COMM_EVERY_MS comm_ms
+	subdir=${DURATION}s_${WARM_DURATION}swarm_${FLUSH_MS}ms_src${SRC_FLUSH_MS[$s]}ms
 	for mode in ${modes[@]}; do
 		for ((iter = 0; iter < 5; ++iter)); do
 			./run_once.sh --app ${APP} \
-				--exp_dir ./${NUM_WORKER}src/${subdir}/${iter}/${TPS_PER_WORKER[idx]}tps_${mode}/ \
+				--exp_dir ./${NUM_WORKER}src_commit_interval/${subdir}/${iter}/${TPS_PER_WORKER}tps_${mode}/ \
 				--gua $mode --duration $DURATION --events_num ${EVENTS} --nworker ${NUM_WORKER} \
-				--tps ${TPS} --warm_duration ${WARM_DURATION} --flushms $FLUSH_MS --src_flushms $SRC_FLUSH_MS \
+				--tps ${TPS} --warm_duration ${WARM_DURATION} --flushms $FLUSH_MS --src_flushms ${SRC_FLUSH_MS[$s]} \
 				--snapshot_s ${SNAPSHOT_S} --comm_everyMs ${COMM_EVERY_MS}
 		done
 	done

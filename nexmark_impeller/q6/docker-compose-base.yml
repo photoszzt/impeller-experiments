@@ -19,11 +19,6 @@ services:
       - --slog_engine_enable_cache
       - --slog_engine_cache_cap_mb=1024
       - --slog_engine_propagate_auxdata
-      # - --slog_enable_statecheck
-      # - --slog_statecheck_interval_sec=10
-      # - --log_path=/tmp/log/engine.log
-      # - --alsologtostderr
-      # - --v=1
     depends_on:
       - zookeeper-setup
     volumes:
@@ -53,10 +48,7 @@ services:
       - --io_uring_entries=2048
       - --io_uring_fd_slots=4096
       - --lb_per_fn_round_robin
-      # - --lb_pick_least_load
-      # - --max_running_requests=16
       - --max_running_requests=0
-      # - --v=1
     depends_on:
       - zookeeper-setup
     volumes:
@@ -76,7 +68,6 @@ services:
        - FAAS_BUILD_TYPE=${FAAS_BUILD_TYPE:-release}
        - FAAS_GO_MAX_PROC_FACTOR=1
        - GOGC=200
-         # - MEASURE_PROC=1
        - MEASURE_SRC=1
        - MEASURE_SINK=1
        - BUFPUSH=1
@@ -100,7 +91,6 @@ services:
        - FAAS_BUILD_TYPE=${FAAS_BUILD_TYPE:-release}
        - FAAS_GO_MAX_PROC_FACTOR=1
        - GOGC=200
-         # - MEASURE_PROC=1
        - MEASURE_SRC=1
        - MEASURE_SINK=1
        - BUFPUSH=1
@@ -125,7 +115,6 @@ services:
        - FAAS_BUILD_TYPE=${FAAS_BUILD_TYPE:-release}
        - FAAS_GO_MAX_PROC_FACTOR=1
        - GOGC=200
-         # - MEASURE_PROC=1
        - MEASURE_SRC=1
        - MEASURE_SINK=1
        - BUFPUSH=1
@@ -153,7 +142,6 @@ services:
        - FAAS_BUILD_TYPE=${FAAS_BUILD_TYPE:-release}
        - FAAS_GO_MAX_PROC_FACTOR=1
        - GOGC=200
-         # - MEASURE_PROC=1
        - MEASURE_SRC=1
        - MEASURE_SINK=1
        - BUFPUSH=1
@@ -181,7 +169,6 @@ services:
        - FAAS_BUILD_TYPE=${FAAS_BUILD_TYPE:-release}
        - FAAS_GO_MAX_PROC_FACTOR=1
        - GOGC=200
-         # - MEASURE_PROC=1
        - MEASURE_SRC=1
        - MEASURE_SINK=1
        - BUFPUSH=1

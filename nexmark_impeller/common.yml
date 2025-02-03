@@ -14,33 +14,7 @@ services:
     restart: always
     environment:
       - ZOO_TICK_TIME=2000
-        # - ZOO_SERVER_ID=1
       - ALLOW_ANONYMOUS_LOGIN=yes
-        # - ZOO_SERVERS=zookeeper:2888:3888,zookeeper2:2888:3888,zookeeper3:2888:3888
-
-        # zookeeper2:
-        #   image: docker.io/bitnami/zookeeper:3.8
-        #   hostname: zookeeper2
-        #   ports:
-        #     - '2181'
-        #   restart: always
-        #   environment:
-        #     - ZOO_TICK_TIME=2000
-        #     - ZOO_SERVER_ID=2
-        #     - ALLOW_ANONYMOUS_LOGIN=yes
-        #     - ZOO_SERVERS=zookeeper:2888:3888,zookeeper2:2888:3888,zookeeper3:2888:3888
-
-        # zookeeper3:
-        #   image: docker.io/bitnami/zookeeper:3.8
-        #   hostname: zookeeper3
-        #   ports:
-        #     - '2181'
-        #   restart: always
-        #   environment:
-        #     - ZOO_TICK_TIME=2000
-        #     - ZOO_SERVER_ID=3
-        #     - ALLOW_ANONYMOUS_LOGIN=yes
-        #     - ZOO_SERVERS=zookeeper:2888:3888,zookeeper2:2888:3888,zookeeper3:2888:3888
 
   zookeeper-setup:
     image: zookeeper:3.6.2
@@ -76,13 +50,6 @@ services:
         --slog_engine_enable_cache \
         --slog_engine_cache_cap_mb=1024 \
         --slog_engine_propagate_auxdata
-
-      # - --disable_concurrency_limiter
-      # - --slog_enable_statecheck
-      # - --slog_statecheck_interval_sec=10
-      # - --log_path=/tmp/log/engine.log
-      # - --alsologtostderr
-      # - --v=1
     depends_on:
       - zookeeper-setup
     volumes:
@@ -124,25 +91,9 @@ services:
       - --io_uring_entries=2048
       - --io_uring_fd_slots=4096
       - --slog_local_cut_interval_us=500
-      # - --slog_storage_flusher_threads=4
-      # - --slog_storage_flusher_threads=2
-      # - --slog_storage_backend=tkrzw_tree
       - --slog_storage_backend=rocksdb
-      # - --slog_storage_backend=lmdb
       - --slog_storage_cache_cap_mb=2048
       - --rocksdb_max_background_jobs=2
-      # - --rocksdb_mbytes_per_sync=8
-      # - --rocksdb_max_total_wal_size_mb=64
-      # - --rocksdb_rate_mbytes_per_sec=256
-      # - --rocksdb_enable_compression
-      # - --lmdb_mapsize_mb=32768
-      # - --slog_enable_statecheck
-      # - --slog_statecheck_interval_sec=10
-      # - --journal_save_path=/tmp/storage/journal
-      # - --journal_file_openflag_dsync
-      # - --log_path=/tmp/log/storage.log
-      # - --alsologtostderr
-      # - --v=1
     depends_on:
       - zookeeper-setup
     volumes:
@@ -151,7 +102,6 @@ services:
       - /mnt/inmem/log:/tmp/log
     environment:
       - FAAS_NODE_ID={{.Task.Slot}}
-      # - MALLOC_CONF=prof:true,prof_prefix:/tmp/storage/profiling/jeprof.out
     restart: always
 
   faas-sequencer:
@@ -166,14 +116,6 @@ services:
       - --io_uring_entries=2048
       - --io_uring_fd_slots=4096
       - --slog_global_cut_interval_us=500
-      # - --slog_sequencer_enable_journal
-      # - --journal_save_path=/tmp/storage/journal
-      # - --journal_file_openflag_dsync
-      # - --slog_enable_statecheck
-      # - --slog_statecheck_interval_sec=10
-      # - --log_path=/tmp/log/sequencer.log
-      # - --alsologtostderr
-      # - --v=1
     depends_on:
       - zookeeper-setup
     volumes:
