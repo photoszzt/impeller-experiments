@@ -1,0 +1,5 @@
+kernel_cmdline
+kernel_version
+machines.json
+__pycache__
+*.svg
