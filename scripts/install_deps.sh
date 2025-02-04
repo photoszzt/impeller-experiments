@@ -1,12 +1,12 @@
 #!/bin/bash
-set -xeuo pipefail
+set -x
 source /etc/lsb-release
 echo $DISTRIB_RELEASE
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 sudo apt-get update
-sudo apt install gnupg ca-certificates curl openjdk-11-jdk-headless
-sudo apt-get install -y build-essential autoconf automake pkg-config libtool numactl clang
+sudo apt install -y gnupg ca-certificates curl openjdk-11-jdk-headless
+sudo apt-get install -y autoconf automake pkg-config libtool numactl clang cmake g++ make curl unzip
 
 go_tar=go1.22.3.linux-amd64.tar.gz
 wget https://go.dev/dl/${go_tar} -O $HOME/${go_tar}
@@ -25,7 +25,6 @@ source $HOME/.cargo/env
 sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b ~/.local/bin
 
 for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove $pkg; done
-# Add Docker's official GPG key:
 sudo apt-get update
 sudo install -m 0755 -d /etc/apt/keyrings
 sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
@@ -45,5 +44,5 @@ curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v26.1/pro
 unzip protoc-26.1-linux-x86_64.zip -d $HOME/.local
 rm protoc-26.1-linux-x86_64.zip
 
-go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
-go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
+/usr/local/go/bin/go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
+/usr/local/go/bin/go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
