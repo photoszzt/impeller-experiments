@@ -5,8 +5,9 @@ WORKSPACE_DIR=$(realpath $SCRIPT_DIR/../../)
 DIR=q8/mem
 
 cd $DIR
-$WORKSPACE_DIR/research-helper-scripts/microservice_helper start-machines --use-spot-instances
-./update_docker.sh
+HELPER_SCRIPT=$(realpath $SCRIPT_DIR/../scripts/exp_helper)
+$HELPER_SCRIPT start-machines --use-spot-instances
+./setup_machine.sh
 cd ../..
 
 TPS_PER_WORKER=(20000 24000 28000)
@@ -38,5 +39,5 @@ done
 cd -
 
 cd $DIR
-$WORKSPACE_DIR/research-helper-scripts/microservice_helper stop-machines
+$HELPER_SCRIPT stop-machines
 cd ../..

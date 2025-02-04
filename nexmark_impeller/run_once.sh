@@ -157,7 +157,7 @@ SCRIPT_DIR=$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)
 
 BASE_DIR=$(realpath $(dirname $0))
 WORKSPACE_DIR=$(realpath $SCRIPT_DIR/../../)
-HELPER_SCRIPT=$WORKSPACE_DIR/research-helper-scripts/microservice_helper
+HELPER_SCRIPT=$(realpath $SCRIPT_DIR/../scripts/exp_helper)
 SRC_DIR=$WORKSPACE_DIR/impeller
 MANAGER_HOST=$($HELPER_SCRIPT get-docker-manager-host --base-dir=$BASE_DIR)
 CLIENT_HOST=$($HELPER_SCRIPT get-client-host --base-dir=$BASE_DIR)

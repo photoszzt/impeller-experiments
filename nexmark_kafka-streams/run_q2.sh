@@ -1,8 +1,9 @@
 #!/bin/bash
 set -x
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-WORKSPACE_DIR=$(realpath $SCRIPT_DIR/../../)
-$WORKSPACE_DIR/research-helper-scripts/microservice_helper start-machines --use-spot-instances
+
+HELPER_SCRIPT=$(realpath $SCRIPT_DIR/../scripts/exp_helper)
+$HELPER_SCRIPT start-machines --use-spot-instances
 
 TPS_PER_WORKER=(4000 16000 32000 48000 64000 80000 88000)
 DURATION=180
@@ -27,4 +28,4 @@ for ((iter = 0; iter < 5; iter++)); do
 done
 cd -
 
-$WORKSPACE_DIR/research-helper-scripts/microservice_helper stop-machines
+$HELPER_SCRIPT stop-machines

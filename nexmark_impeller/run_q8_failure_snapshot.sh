@@ -2,12 +2,13 @@
 set -x
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 WORKSPACE_DIR=$(realpath $SCRIPT_DIR/../../)
-DIR=q8_boki/mem
+DIR=q8/mem
 
 cd $DIR
-$WORKSPACE_DIR/research-helper-scripts/microservice_helper start-machines --use-spot-instances
-./update_docker.sh
-cd ../..
+HELPER_SCRIPT=$(realpath $SCRIPT_DIR/../scripts/exp_helper)
+$HELPER_SCRIPT start-machines --use-spot-instances
+./setup_machine.sh
+cd $SCRIPT_DIR
 
 TPS_PER_WORKER=(20000 24000 28000)
 NUM_WORKER=4
@@ -36,5 +37,5 @@ done
 cd -
 
 cd $DIR
-$WORKSPACE_DIR/research-helper-scripts/microservice_helper stop-machines
-cd ../..
+$HELPER_SCRIPT stop-machines
+cd $SCRIPT_DIR

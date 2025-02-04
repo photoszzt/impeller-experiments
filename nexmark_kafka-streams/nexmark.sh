@@ -167,7 +167,7 @@ echo "app: $NAME, exp_dir: $EXP_DIR, num_instance: $NUM_INSTANCE, num events: $N
 
 BASE_DIR=$(realpath $(dirname $0))
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-HELPER_SCRIPT=$(realpath $SCRIPT_DIR/../../research-helper-scripts/microservice_helper)
+HELPER_SCRIPT=$(realpath $SCRIPT_DIR/../scripts/exp_helper)
 WORKSPACE_DIR=$(realpath $SCRIPT_DIR/../../)
 
 MANAGER_HOST=$($HELPER_SCRIPT get-docker-manager-host --base-dir=$BASE_DIR)

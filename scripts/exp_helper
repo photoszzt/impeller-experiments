@@ -1,0 +1,600 @@
+#!/usr/bin/python3
+
+import os
+import sys
+import time
+import json
+import yaml
+import random
+import string
+import argparse
+import subprocess as sp
+
+AMI_ID = 'ami-07f5b33a5a42af31f'
+SECURITY_GROUP_ID = 'sg-084da18533b118152'
+INSTANCE_PROFILE_ROLE = 'impeller-ae-experiments'
+PLACEMENT_GROUP = 'impeller'
+AVAILABILITY_ZONE = 'us-east-2c'
+INSTANCE_NAME_PREFIX = 'impeller-'
+
+def random_string(length):
+    letters = string.ascii_lowercase
+    return ''.join(random.choice(letters) for _ in range(length))
+
+def run_aws_ec2_command(cmd):
+    ret = sp.run(['aws', '--output', 'json', 'ec2'] + cmd,
+                 stdout=sp.PIPE, stderr=sp.PIPE, encoding='utf8', cwd=os.environ['HOME'])
+    # if ret.returncode != 0:
+    #     raise Exception('Failed to run aws-cli ec2 command: ' + ret.stderr)
+    result = ret.stdout.strip()
+    return json.loads(result) if result != '' else {}
+
+def run_aws_lambda_command(cmd):
+    ret = sp.run(['aws', '--output', 'json', 'lambda'] + cmd,
+                 stdout=sp.PIPE, stderr=sp.PIPE, encoding='utf8', cwd=os.environ['HOME'])
+    if ret.returncode != 0:
+        raise Exception('Failed to run aws-cli lambda command: ' + ret.stderr)
+    result = ret.stdout.strip()
+    return json.loads(result) if result != '' else {}
+
+def run_remote_command(ssh_str, cmd):
+    full_cmd = ['ssh', '-q', ssh_str, '--'] + cmd
+    # print(" ".join(full_cmd))
+    ret = sp.run(full_cmd,
+                 stdout=sp.PIPE, stderr=sp.PIPE, encoding='utf8')
+    if ret.returncode != 0:
+        raise Exception('Failed to run remote command: ' + ' '.join(cmd) + '\n' + ret.stderr)
+    return ret.stdout, ret.stderr
+
+def run_local_command(cmd):
+    # print(" ".join(cmd))
+    ret = sp.run(cmd, stdout=sp.PIPE, stderr=sp.PIPE, encoding='utf8')
+    if ret.returncode != 0:
+        raise Exception('Failed to run local command: ' + ' '.join(cmd) + '\n' + ret.stderr)
+    return ret.stdout, ret.stderr
+
+def copy_remote_to_local(ssh_str, remote_path, local_path):
+    ret = sp.run(['scp', '-q', '-r', f"{ssh_str}:{remote_path}", local_path], encoding='utf8')
+    if ret.returncode != 0:
+        raise Exception(f'Failed to copy from {ssh_str}:{remote_path} to {local_path}')
+
+def start_ec2_instance(name, instance_type):
+    cli_output = run_aws_ec2_command([
+        'run-instances', '--image-id', AMI_ID, '--instance-type', instance_type,
+        '--security-group-ids', SECURITY_GROUP_ID,
+        '--placement', 'AvailabilityZone='+AVAILABILITY_ZONE,
+        '--iam-instance-profile', 'Arn='+INSTANCE_PROFILE_ROLE,
+        '--tag-specifications', 'ResourceType=instance,Tags=[{Key=Name,Value='+INSTANCE_NAME_PREFIX+name+'}]'])
+    instance_info = cli_output['Instances'][0]
+    return {
+        'instance_id': instance_info['InstanceId'],
+        'dns': instance_info['PrivateDnsName'],
+        'ip': instance_info['PrivateIpAddress']
+        # 'public_ip': instance_info['PublicIpAddress']
+    }
+
+def request_ec2_spot_instance(group_id, instance_type, availability_zone):
+    cli_output = run_aws_ec2_command([
+        'request-spot-instances', '--type', 'one-time',
+        '--availability-zone-group', group_id, '--launch-group', group_id,
+        '--launch-specification', json.dumps({
+            'ImageId': AMI_ID, 'InstanceType': instance_type,
+            'SecurityGroupIds': [SECURITY_GROUP_ID],
+            'IamInstanceProfile': { 'Arn': INSTANCE_PROFILE_ROLE },
+            'Placement': {
+                'AvailabilityZone': availability_zone,
+                'GroupName': PLACEMENT_GROUP+'-'+availability_zone[-1]
+            }
+        })])
+    return cli_output['SpotInstanceRequests'][0]['SpotInstanceRequestId']
+
+def stop_instances(machine_infos):
+    instance_ids = list(map(lambda x: x['instance_id'], machine_infos.values()))
+    run_aws_ec2_command(['terminate-instances', '--instance-ids'] + instance_ids)
+
+def cancel_spot_instance_requests(spot_requests):
+    request_ids = list(spot_requests.values())
+    for request_id in request_ids:
+        request_status = run_aws_ec2_command(
+            ['describe-spot-instance-requests',
+             '--spot-instance-request-ids', request_id])
+        request_status = request_status['SpotInstanceRequests'][0]
+        if 'InstanceId' in request_status:
+            run_aws_ec2_command(['terminate-instances', '--instance-ids',
+                                 request_status['InstanceId']])
+        run_aws_ec2_command(['cancel-spot-instance-requests',
+                             '--spot-instance-request-ids', request_id])
+
+def start_instances(machine_configs):
+    results = {}
+    for name, config in machine_configs.items():
+        try:
+            machine_info = start_ec2_instance(name, config['type'])
+            machine_info['role'] = config['role']
+            if 'labels' in config:
+                machine_info['labels'] = config['labels']
+            results[name] = machine_info
+        except Exception as e:
+            stop_instances(results)
+            raise e
+    return results
+
+def start_spot_instances(machine_configs, waiting_time, availability_zone):
+    spot_requests = {}
+    group_id = random_string(10)
+    results = {}
+    try:
+        for name, config in machine_configs.items():
+            spot_requests[name] = request_ec2_spot_instance(
+                group_id, config['type'], availability_zone)
+        time.sleep(waiting_time)
+        for name, config in machine_configs.items():
+            request_status = run_aws_ec2_command(
+                ['describe-spot-instance-requests',
+                 '--spot-instance-request-ids', spot_requests[name]])
+            request_status = request_status['SpotInstanceRequests'][0]
+            if request_status['Status']['Code'] != 'fulfilled':
+                raise Exception(
+                    'Spot request for %s is not fulfilled after %d seconds' % (name, waiting_time))
+            instance_id = request_status['InstanceId']
+            instance_info = run_aws_ec2_command(
+                ['describe-instances', '--instance-ids', instance_id])
+            instance_info = instance_info['Reservations'][0]['Instances'][0]
+            results[name] = {
+                'instance_id': instance_id,
+                'dns': instance_info['PrivateDnsName'],
+                'ip': instance_info['PrivateIpAddress'],
+                'public_ip': instance_info['PublicIpAddress'],
+                'role': config['role']
+            }
+            if 'labels' in config:
+                results[name]['labels'] = config['labels']
+            run_aws_ec2_command(
+                ['create-tags', '--resources', instance_id, '--tags', 'Key=Name,Value='+INSTANCE_NAME_PREFIX+name])
+    except Exception as e:
+        cancel_spot_instance_requests(spot_requests)
+        raise e
+    return results
+
+def setup_hostname_for_machines(machine_infos):
+    for name, machine_info in machine_infos.items():
+        run_remote_command(machine_info['dns'], ['sudo', 'hostnamectl', 'set-hostname', name])
+
+def setup_instance_storage(machine_configs, machine_infos):
+    for name, machine_config in machine_configs.items():
+        if 'mount_instance_storage' in machine_config:
+            dns = machine_infos[name]['dns']
+            device = '/dev/' + machine_config['mount_instance_storage']
+            run_remote_command(dns, ['sudo', 'mkfs', '-t', 'ext4', device])
+            run_remote_command(dns, ['sudo', 'mkdir', '/mnt/storage'])
+            run_remote_command(dns, ['sudo', 'mount', '-o', 'defaults,noatime', device, '/mnt/storage'])
+
+def setup_docker_swarm_for_machines(machine_infos):
+    manager_machine = None
+    for name, machine_info in machine_infos.items():
+        if machine_info['role'] == 'manager':
+            if manager_machine is not None:
+                raise Exception('More than one manager machine')
+            run_remote_command(
+                machine_info['dns'],
+                ['docker', 'swarm', 'init', '--advertise-addr', machine_info['ip']])
+            time.sleep(10)
+            manager_machine = name
+            join_token, _ = run_remote_command(
+                machine_info['dns'],
+                ['docker', 'swarm', 'join-token', '-q', 'worker'])
+            join_token = join_token.strip()
+    if manager_machine is None:
+        raise Exception('No manager machine')
+    for name, machine_info in machine_infos.items():
+        if machine_info['role'] == 'worker':
+            run_remote_command(
+                machine_info['dns'],
+                ['docker', 'swarm', 'join', '--token', join_token,
+                 machine_infos[manager_machine]['ip']+':2377'])
+    time.sleep(10)
+    for name, machine_info in machine_infos.items():
+        if 'labels' in machine_info:
+            cmd = ['docker', 'node', 'update']
+            for label_str in machine_info['labels']:
+                cmd.extend(['--label-add', label_str])
+            cmd.append(name)
+            run_remote_command(machine_infos[manager_machine]['dns'], cmd)
+
+def start_machines_main(base_dir, use_spot_instances,
+                        spot_instances_waiting_time, spot_instances_availability_zone):
+    if os.path.exists(os.path.join(base_dir, 'machines.json')):
+        raise Exception('Machines already started')
+    with open(os.path.join(base_dir, 'config.json')) as fin:
+        config = json.load(fin)
+    if use_spot_instances:
+        machine_infos = start_spot_instances(
+            config['machines'], spot_instances_waiting_time, spot_instances_availability_zone)
+    else:
+        machine_infos = start_instances(config['machines'])
+    try:
+        time.sleep(60)
+        start_time = time.time()
+        setup_hostname_for_machines(machine_infos)
+        setup_instance_storage(config['machines'], machine_infos)
+        setup_docker_swarm_for_machines(machine_infos)
+        elapsed = time.time() - start_time
+        print('Finish setup in %.3f seconds' % (elapsed,))
+        with open(os.path.join(base_dir, 'machines.json'), 'w') as fout:
+            json.dump(machine_infos, fout, indent=4, sort_keys=True)
+    except Exception as e:
+        stop_instances(machine_infos)
+        raise e
+
+def stop_machines_main(base_dir):
+    if not os.path.exists(os.path.join(base_dir, 'machines.json')):
+        raise Exception('Machines not started')
+    with open(os.path.join(base_dir, 'machines.json')) as fin:
+        machine_infos = json.load(fin)
+    stop_instances(machine_infos)
+    os.remove(os.path.join(base_dir, 'machines.json'))
+
+def generate_docker_compose_main(base_dir):
+    with open(os.path.join(base_dir, 'config.json')) as fin:
+        config = json.load(fin)
+    docker_compose = { 'version': '3.8', 'services': {} }
+    for name, service_config in config['services'].items():
+        docker_compose['services'][name] = { 'deploy': {} }
+        service_docker_compose = docker_compose['services'][name]
+        service_docker_compose['deploy']['replicas'] = service_config.get('replicas', 1)
+        if 'placement' in service_config:
+            service_docker_compose['deploy']['placement'] = {
+                'constraints': ['node.hostname == %s' % (service_config['placement'],)]
+            }
+        elif 'placement_label' in service_config:
+            print(service_config)
+            max_replicas = 1
+            if 'max_replicas_per_node' in service_config:
+                max_replicas = service_config['max_replicas_per_node']
+            service_docker_compose['deploy']['placement'] = {
+                'constraints': ['node.labels.%s == true' % (service_config['placement_label'],)],
+                'max_replicas_per_node': max_replicas 
+            }
+        service_docker_compose['deploy']['resources'] = {}
+        service_docker_compose['environment'] = []
+        service_docker_compose['volumes'] = []
+        if 'cpu_limit' in service_config:
+            service_docker_compose['deploy']['resources']['limits'] = {
+                'cpus': service_config['cpu_limit']
+            }
+        if 'cpu_reservation' in service_config:
+            service_docker_compose['deploy']['resources']['reservations'] = {
+                'cpus': service_config['cpu_reservation']
+            }
+        if 'go_max_procs' in service_config:
+            service_docker_compose['environment'].append(
+                'GOMAXPROCS=%d' % (service_config['go_max_procs'],))
+        if 'public_port' in service_config:
+            service_docker_compose['ports'] = [service_config['public_port'] + '/tcp']
+        if 'need_aws_env' in service_config and service_config['need_aws_env']:
+            if 'aws_access_key_id' in config:
+                service_docker_compose['environment'].append(
+                    'AWS_ACCESS_KEY_ID=%s' % (config['aws_access_key_id'],))
+            if 'aws_secret_access_key' in config:
+                service_docker_compose['environment'].append(
+                    'AWS_SECRET_ACCESS_KEY=%s' % (config['aws_secret_access_key'],))
+            if 'aws_region' in config:
+                service_docker_compose['environment'].append(
+                    'AWS_REGION=%s' % (config['aws_region'],))
+        if 'mount_certs' in service_config and service_config['mount_certs']:
+            service_docker_compose['volumes'].append(
+                '/etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt')
+    with open(os.path.join(base_dir, 'docker-compose.yml'), 'w') as fout:
+        yaml.dump(docker_compose, fout, default_flow_style=False)
+
+def get_host_main(base_dir, machine_name):
+    if not os.path.exists(os.path.join(base_dir, 'machines.json')):
+        raise Exception('Machines not started')
+    with open(os.path.join(base_dir, 'machines.json')) as fin:
+        machine_infos = json.load(fin)
+    print(machine_infos[machine_name]['dns'])
+
+def get_service_host_main(base_dir, service_name):
+    if not os.path.exists(os.path.join(base_dir, 'machines.json')):
+        raise Exception('Machines not started')
+    with open(os.path.join(base_dir, 'config.json')) as fin:
+        config = json.load(fin)
+    with open(os.path.join(base_dir, 'machines.json')) as fin:
+        machine_infos = json.load(fin)
+    machine = config['services'][service_name]['placement']
+    print(machine_infos[machine]['dns'])
+
+def get_docker_manager_host_main(base_dir):
+    if not os.path.exists(os.path.join(base_dir, 'machines.json')):
+        raise Exception('Machines not started')
+    with open(os.path.join(base_dir, 'machines.json')) as fin:
+        machine_infos = json.load(fin)
+    for machine_info in machine_infos.values():
+        if machine_info['role'] == 'manager':
+            print(machine_info['dns'])
+            break
+
+def get_client_host_main(base_dir):
+    if not os.path.exists(os.path.join(base_dir, 'machines.json')):
+        raise Exception('Machines not started')
+    with open(os.path.join(base_dir, 'machines.json')) as fin:
+        machine_infos = json.load(fin)
+    for machine_info in machine_infos.values():
+        if machine_info['role'] == 'client':
+            print(machine_info['dns'])
+            break
+
+def get_all_server_hosts_main(base_dir):
+    if not os.path.exists(os.path.join(base_dir, 'machines.json')):
+        raise Exception('Machines not started')
+    with open(os.path.join(base_dir, 'machines.json')) as fin:
+        machine_infos = json.load(fin)
+    for machine_info in machine_infos.values():
+        if machine_info['role'] != 'client':
+            print(machine_info['dns'])
+
+def get_machine_with_label_main(base_dir, label, show_ip=False):
+    if not os.path.exists(os.path.join(base_dir, 'machines.json')):
+        raise Exception('Machines not started')
+    with open(os.path.join(base_dir, 'config.json')) as fin:
+        config = json.load(fin)
+    with open(os.path.join(base_dir, 'machines.json')) as fin:
+        machine_infos = json.load(fin)
+    for name, machine_info in machine_infos.items():
+        if 'labels' in config['machines'][name]:
+            labels = config['machines'][name]['labels']
+            if label in labels or label+'=true' in labels:
+                if show_ip:
+                    print(machine_info['ip'])
+                else:
+                    print(machine_info['dns'])
+
+def get_container_id_main(base_dir, service_name, machine_name, machine_host):
+    if not os.path.exists(os.path.join(base_dir, 'machines.json')):
+        raise Exception('Machines not started')
+    with open(os.path.join(base_dir, 'machines.json')) as fin:
+        machine_infos = json.load(fin)
+    if machine_host is None:
+        if machine_name is None:
+            with open(os.path.join(base_dir, 'config.json')) as fin:
+                config = json.load(fin)
+            machine_name = config['services'][service_name]['placement']
+        machine_host = machine_infos[machine_name]['dns']
+    short_id, _ = run_remote_command(machine_host,
+                                     ['docker', 'ps', '-q', '-f', 'name='+service_name])
+    short_id = short_id.strip()
+    if short_id != '':
+        container_info, _ = run_remote_command(machine_host, ['docker', 'inspect', short_id])
+        container_info = json.loads(container_info)[0]
+        print(container_info['Id'])
+
+
+def collect_func_output_main(base_dir, log_path):
+    if not os.path.exists(os.path.join(base_dir, 'machines.json')):
+        raise Exception('Machines not started')
+    os.makedirs(log_path, exist_ok=True)
+    with open(os.path.join(base_dir, 'machines.json')) as fin:
+        machine_infos = json.load(fin)
+    remote_home_path = '/home/ubuntu'
+    for k, machine_info in machine_infos.items():
+        if machine_info['role'] == 'client':
+            continue
+        copy_output = False
+        if "engine" in k or "storage" in k:
+            run_remote_command(machine_info['dns'], ['rm', '-rf', f'{remote_home_path}/func_output'])
+            run_remote_command(machine_info['dns'], ['rm', '-f', f'{remote_home_path}/func_output.tar.gz'])
+            run_remote_command(machine_info['dns'], ['mkdir', '-p', f'{remote_home_path}/func_output'])
+            copy_output = True
+        if copy_output:
+            run_remote_command(machine_info['dns'], ['cp', "-r", "/mnt/inmem/faas/output", f"{remote_home_path}/func_output"])
+            if "engine" in k:
+                local_path = os.path.join(log_path, "engine", f"{machine_info['dns']}")
+            else:
+                local_path = os.path.join(log_path, "storage", f"{machine_info['dns']}")
+            os.makedirs(local_path, exist_ok=True)
+            run_remote_command(machine_info['dns'], ['tar', '-cf', 'func_output.tar.gz', 
+                '-C', f'{remote_home_path}/func_output/', '.'])
+            copy_remote_to_local(machine_info['dns'], f"{remote_home_path}/func_output.tar.gz", log_path)
+            run_local_command(['tar', '-xf', os.path.join(log_path, 'func_output.tar.gz'), '-C', local_path])
+            run_local_command(['rm', os.path.join(log_path, 'func_output.tar.gz')])
+
+def collect_container_logs_main(base_dir, log_path):
+    if not os.path.exists(os.path.join(base_dir, 'machines.json')):
+        raise Exception('Machines not started')
+    os.makedirs(log_path, exist_ok=True)
+    with open(os.path.join(base_dir, 'machines.json')) as fin:
+        machine_infos = json.load(fin)
+    remote_home_path = '/home/ubuntu'
+    for k, machine_info in machine_infos.items():
+        if machine_info['role'] == 'client':
+            continue
+        copy_output = False
+        is_kafka_app = 'app' in k and 'app_node=true' in machine_info['labels']
+        remote_container_out = f'{remote_home_path}/container_out'
+        run_remote_command(machine_info['dns'], ['rm', '-rf', remote_container_out])
+        run_remote_command(machine_info['dns'], ['rm', '-f', f'{remote_home_path}/container_out.tar.gz'])
+        run_remote_command(machine_info['dns'], ['mkdir', '-p', remote_container_out])
+        if "engine" in k or "storage" in k or is_kafka_app:
+            run_remote_command(machine_info['dns'], ['rm', '-rf', f'{remote_home_path}/func_output'])
+            run_remote_command(machine_info['dns'], ['rm', '-f', f'{remote_home_path}/func_output.tar.gz'])
+            run_remote_command(machine_info['dns'], ['mkdir', '-p', f'{remote_home_path}/func_output'])
+            copy_output = True
+        live_container_ids, _ = run_remote_command(machine_info['dns'], ['docker', 'ps', '-q'])
+        live_container_ids = live_container_ids.strip().split()
+        for container_id in live_container_ids:
+            container_info, _ = run_remote_command(
+                machine_info['dns'], ['docker', 'inspect', container_id])
+            container_info = json.loads(container_info)[0]
+            container_name = container_info['Name'][1:]  # remove prefix '/'
+            run_remote_command(
+                machine_info['dns'], ['docker', 'container', 'logs', container_id, '>', 
+                    os.path.join(remote_container_out, f'{container_name}.stdout'), '2>',
+                    os.path.join(remote_container_out, f'{container_name}.stderr')])
+        for container_id in live_container_ids:
+            if copy_output:
+                if is_kafka_app:
+                    out, _ = run_remote_command(machine_info['dns'], ["docker", 'ps', "--format={{.Names}}",
+                        "-f", f"id={container_id}"])
+                    if "nexmark" in out:
+                        run_remote_command(machine_info['dns'], 
+                                ["docker", 'cp', f"{container_id}:/tmp/stats/", f"{remote_home_path}/func_output/{container_id}/"])
+        if copy_output:
+            if "engine" in k or "storage" in k:
+                run_remote_command(machine_info['dns'], ['cp', "-r", f"/mnt/inmem/faas/output", f"/home/ubuntu/func_output"])
+            if "engine" in k:
+                local_path = os.path.join(log_path, "engine", f"{machine_info['dns']}")
+            elif "storage" in k:
+                local_path = os.path.join(log_path, "storage", f"{machine_info['dns']}")
+            else:
+                local_path = os.path.join(log_path, f"{machine_info['dns']}")
+            os.makedirs(local_path, exist_ok=True)
+            run_remote_command(machine_info['dns'], ['tar', '-cf', 'func_output.tar.gz', 
+                '-C', f'{remote_home_path}/func_output/', '.'])
+            copy_remote_to_local(machine_info['dns'], f"{remote_home_path}/func_output.tar.gz", log_path)
+            run_local_command(['tar', '-xf', os.path.join(log_path, 'func_output.tar.gz'), '-C', local_path])
+            run_local_command(['rm', os.path.join(log_path, 'func_output.tar.gz')])
+        run_remote_command(machine_info['dns'], ['tar', '-cf', f'container_out.tar.gz', 
+            '-C', remote_container_out, '.'])
+        copy_remote_to_local(machine_info['dns'], f"{remote_home_path}/container_out.tar.gz", log_path)
+        run_local_command(['tar', '-xf', os.path.join(log_path, 'container_out.tar.gz'), '-C', log_path])
+        run_local_command(['rm', os.path.join(log_path, 'container_out.tar.gz')])
+
+def generate_lambda_service_config(base_dir, base_service_config_file):
+    if not os.path.exists(os.path.join(base_dir, 'machines.json')):
+        raise Exception('Machines not started')
+    with open(os.path.join(base_dir, 'config.json')) as fin:
+        config = json.load(fin)
+    with open(os.path.join(base_dir, 'machines.json')) as fin:
+        machine_infos = json.load(fin)
+    with open(base_service_config_file) as fin:
+        base_service_config = json.load(fin)
+    service_config = {}
+    for key, entry in base_service_config.items():
+        if 'addr' in entry and entry['addr'] in config['services'] and 'public_port' in config['services'][entry['addr']]:
+            machine_info = machine_infos[config['services'][entry['addr']]['placement']]
+            port_config = config['services'][entry['addr']]['public_port']
+            parts = port_config.split(':')
+            port = int(parts[0])
+            service_config[key] = { 'addr': machine_info['public_ip'], 'port': port }
+        else:
+            service_config[key] = entry
+    print(json.dumps(service_config))
+
+def publish_lambdas_main(base_dir, base_service_config_file):
+    if not os.path.exists(os.path.join(base_dir, 'machines.json')):
+        raise Exception('Machines not started')
+    if os.path.exists(os.path.join(base_dir, 'published_lambdas.json')):
+        raise Exception('Lambda already published')
+    with open(os.path.join(base_dir, 'config.json')) as fin:
+        config = json.load(fin)
+    with open(os.path.join(base_dir, 'machines.json')) as fin:
+        machine_infos = json.load(fin)
+    with open(base_service_config_file) as fin:
+        base_service_config = json.load(fin)
+    service_config = {}
+    for key, entry in base_service_config.items():
+        if 'addr' in entry and entry['addr'] in config['services'] and 'public_port' in config['services'][entry['addr']]:
+            machine_info = machine_infos[config['services'][entry['addr']]['placement']]
+            port_config = config['services'][entry['addr']]['public_port']
+            parts = port_config.split(':')
+            port = int(parts[0])
+            service_config[key] = { 'addr': machine_info['public_ip'], 'port': port }
+        else:
+            service_config[key] = entry
+    service_config_str = json.dumps(service_config)
+    lambda_results = {}
+    for fn_name, fn_config in config['lambdas'].items():
+        run_aws_lambda_command([
+            'update-function-configuration',
+            '--function-name', fn_name,
+            '--environment', 'Variables={CONFIG_JSON_STR=\'%s\'}' % service_config_str])
+        ret = run_aws_lambda_command(['publish-version', '--function-name', fn_name])
+        version = ret['Version']
+        run_aws_lambda_command([
+            'update-alias', '--function-name', fn_name,
+            '--name', 'CURRENT', '--function-version', version])
+        if 'reserved_concurrency' in fn_config:
+            value = fn_config['reserved_concurrency']
+            run_aws_lambda_command([
+                'put-function-concurrency', '--function-name', fn_name,
+                '--reserved-concurrent-executions', str(value)])
+        lambda_results[fn_name] = { 'version': version }
+    with open(os.path.join(base_dir, 'published_lambdas.json'), 'w') as fout:
+        json.dump(lambda_results, fout, indent=4, sort_keys=True)
+    for fn_name, fn_config in config['lambdas'].items():
+        if 'provisioned_concurrency' in fn_config:
+            version = lambda_results[fn_name]['version']
+            value = fn_config['provisioned_concurrency']
+            run_aws_lambda_command([
+                'put-provisioned-concurrency-config', '--function-name', fn_name,
+                '--qualifier', version, '--provisioned-concurrent-executions', str(value)])
+
+def cleanup_lambdas_main(base_dir):
+    if not os.path.exists(os.path.join(base_dir, 'published_lambdas.json')):
+        raise Exception('Lambda not published')
+    with open(os.path.join(base_dir, 'published_lambdas.json')) as fin:
+        lambda_results = json.load(fin)
+    for fn_name, fn_config in lambda_results.items():
+        version = fn_config['version']
+        run_aws_lambda_command([
+            'delete-provisioned-concurrency-config', '--function-name', fn_name,
+            '--qualifier', version])
+        run_aws_lambda_command([
+            'delete-function-concurrency', '--function-name', fn_name])
+    os.remove(os.path.join(base_dir, 'published_lambdas.json'))
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('cmd', type=str)
+    parser.add_argument('--base-dir', type=str, default='.')
+    parser.add_argument('--machine-name', type=str, default=None)
+    parser.add_argument('--machine-label', type=str, default=None)
+    parser.add_argument('--machine-host', type=str, default=None)
+    parser.add_argument('--service', type=str, default=None)
+    parser.add_argument('--use-spot-instances', action='store_true')
+    parser.add_argument('--spot-instances-waiting-time', type=int, default=10)
+    parser.add_argument('--spot-instances-availability-zone', type=str, default=AVAILABILITY_ZONE)
+    parser.add_argument('--log-path', type=str, default=None)
+    parser.add_argument('--base-service-config', type=str, default=None)
+    args = parser.parse_args()
+    try:
+        if args.cmd == 'start-machines':
+            start_machines_main(args.base_dir, args.use_spot_instances,
+                                args.spot_instances_waiting_time,
+                                args.spot_instances_availability_zone)
+        elif args.cmd == 'stop-machines':
+            stop_machines_main(args.base_dir)
+        elif args.cmd == 'generate-docker-compose':
+            generate_docker_compose_main(args.base_dir)
+        elif args.cmd == 'get-host':
+            get_host_main(args.base_dir, args.machine_name)
+        elif args.cmd == 'get-service-host':
+            get_service_host_main(args.base_dir, args.service)
+        elif args.cmd == 'get-docker-manager-host':
+            get_docker_manager_host_main(args.base_dir)
+        elif args.cmd == 'get-client-host':
+            get_client_host_main(args.base_dir)
+        elif args.cmd == 'get-all-server-hosts':
+            get_all_server_hosts_main(args.base_dir)
+        elif args.cmd == 'get-machine-with-label':
+            get_machine_with_label_main(args.base_dir, args.machine_label)
+        elif args.cmd == 'get-machine-ip-with-label':
+            get_machine_with_label_main(args.base_dir, args.machine_label, show_ip=True)
+        elif args.cmd == 'collect-container-logs':
+            collect_container_logs_main(args.base_dir, args.log_path)
+        elif args.cmd == 'collect-func-output':
+            collect_func_output_main(args.base_dir, args.log_path)
+        elif args.cmd == 'get-container-id':
+            get_container_id_main(args.base_dir, args.service, args.machine_name, args.machine_host)
+        elif args.cmd == 'publish-lambdas':
+            publish_lambdas_main(args.base_dir, args.base_service_config)
+        elif args.cmd == 'cleanup-lambdas':
+            cleanup_lambdas_main(args.base_dir)
+        else:
+            raise Exception('Unknown command: ' + args.cmd)
+    except Exception as e:
+        err_str = str(e)
+        if not err_str.endswith('\n'):
+            err_str += '\n'
+        sys.stderr.write(err_str)
+        sys.exit(1)
