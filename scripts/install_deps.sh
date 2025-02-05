@@ -6,7 +6,7 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 sudo apt-get update
 sudo apt install -y gnupg ca-certificates curl openjdk-11-jdk-headless
-sudo apt-get install -y autoconf automake pkg-config libtool numactl clang cmake g++ make curl unzip
+sudo apt-get install -y autoconf automake pkg-config libtool numactl clang cmake g++ make curl unzip zip
 
 go_tar=go1.22.3.linux-amd64.tar.gz
 wget https://go.dev/dl/${go_tar} -O $HOME/${go_tar}
@@ -55,3 +55,7 @@ fi
 curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
 unzip awscli-bundle.zip
 sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
+
+curl -s "https://get.sdkman.io" | bash
+source "/home/ubuntu/.sdkman/bin/sdkman-init.sh"
+sdk install gradle 8.5
