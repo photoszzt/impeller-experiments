@@ -212,7 +212,7 @@ for HOST in $ALL_STORAGE_HOSTS; do
 	done
 done
 
-ssh -q $CLIENT_HOST -- "$WORKSPACE_DIR/sharedlog-stream-experiments/nexmark_sharedlog/zip_files.sh /home/ubuntu/${APP_NAME}/${EXP_DIR}/stats"
+ssh -q $CLIENT_HOST -- "$WORKSPACE_DIR/impeller-experiments/nexmark_impeller/zip_files.sh /home/ubuntu/${APP_NAME}/${EXP_DIR}/stats"
 
 scp -r $CLIENT_HOST:/home/ubuntu/${APP_NAME}/${EXP_DIR}/stats ${EXP_DIR}
 

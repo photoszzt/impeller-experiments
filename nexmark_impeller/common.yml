@@ -40,7 +40,7 @@ services:
         --zookeeper_host=zookeeper:2181 \
         --listen_iface=eth0 \
         --root_path_for_ipc=/tmp/faas/ipc \
-        --func_config_file=/exp/nexmark_sharedlog/specs/remote_txn_mngr.json \
+        --func_config_file=/exp/nexmark_impeller/specs/remote_txn_mngr.json \
         --num_io_workers=4 \
         --socket_listen_backlog=1024 \
         --instant_rps_p_norm=0.8 \

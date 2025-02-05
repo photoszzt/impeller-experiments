@@ -8,7 +8,7 @@ services:
       - --zookeeper_host=zookeeper:2181
       - --listen_iface=eth0
       - --root_path_for_ipc=/tmp/faas/ipc
-      - --func_config_file=/exp/nexmark_sharedlog/specs/q1.json
+      - --func_config_file=/exp/nexmark_impeller/specs/q1.json
       - --num_io_workers=4
       - --socket_listen_backlog=1024
       - --instant_rps_p_norm=0.8
@@ -41,7 +41,7 @@ services:
       - --zookeeper_host=zookeeper:2181
       - --listen_iface=eth0
       - --http_port=8080
-      - --func_config_file=/exp/nexmark_sharedlog/specs/q1_gateway.json
+      - --func_config_file=/exp/nexmark_impeller/specs/q1_gateway.json
       - --num_io_workers=8
       - --socket_listen_backlog=1024
       - --io_uring_entries=2048

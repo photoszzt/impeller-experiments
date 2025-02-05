@@ -1,0 +1,3 @@
+[
+    { "funcName": "remoteTxnMngr", "funcId": 110, "minWorkers": 1, "maxWorkers": 1 }
+]
