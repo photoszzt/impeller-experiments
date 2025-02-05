@@ -46,3 +46,12 @@ rm protoc-26.1-linux-x86_64.zip
 
 /usr/local/go/bin/go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
 /usr/local/go/bin/go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
+
+if [[ "$DISTRIB_RELEASE" = "20.04" ]]; then
+	sudo apt-get install python-is-python3
+fi
+
+# install aws-cli
+curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
+unzip awscli-bundle.zip
+sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
