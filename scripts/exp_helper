@@ -11,11 +11,9 @@ import argparse
 import subprocess as sp
 
 AMI_ID = 'ami-0c6de836734de3280'
-SECURITY_GROUP_ID = 'sg-0eb69d33dda05ea61'
 INSTANCE_PROFILE_ROLE = 'impeller-ae-experiments'
 PLACEMENT_GROUP = 'impeller-experiments'
 AVAILABILITY_ZONE = 'us-east-2c'
-INSTANCE_NAME_PREFIX = 'impeller-'
 AWS_REGION = 'us-east-2'
 SECURITY_GROUP_NAME = 'impeller'
 
