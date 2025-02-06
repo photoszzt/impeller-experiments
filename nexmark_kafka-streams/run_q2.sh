@@ -4,6 +4,7 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
 HELPER_SCRIPT=$(realpath $SCRIPT_DIR/../scripts/exp_helper)
 $HELPER_SCRIPT start-machines --use-spot-instances
+$SCRIPT_DIR/setup_machine.sh
 
 TPS_PER_WORKER=(4000 16000 32000 48000 64000 80000 88000)
 DURATION=180
