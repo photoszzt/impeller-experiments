@@ -12,6 +12,7 @@ BASE_DIR=$(realpath $(dirname $0))
 WORKSPACE_DIR=$(realpath $SCRIPT_DIR/../../)
 HELPER_SCRIPT=$(realpath $SCRIPT_DIR/../scripts/exp_helper)
 ALL_HOSTS=$($HELPER_SCRIPT get-all-server-hosts --base-dir=$BASE_DIR)
+CLIENT_HOST=$($HELPER_SCRIPT get-client-host --base-dir=$BASE_DIR)
 MANAGER_HOST=$($HELPER_SCRIPT get-docker-manager-host --base-dir=$BASE_DIR)
 DOCKER_VER=$(ssh -q $MANAGER_HOST -oStrictHostKeyChecking=no -- 'docker version -f "{{.Server.Version}}"')
 DOCKER_VER_MAJOR=$(echo "$DOCKER_VER" | cut -d'.' -f 1)
@@ -30,6 +31,7 @@ done
 for pid in ${pids[*]}; do
 	wait $pid
 done
+ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "[ -d /home/ubuntu/impeller-artifact ] || git clone --recurse-submodules -j8 https://github.com/ut-osa/impeller-artifact.git /home/ubuntu/impeller-artifact"
 
 i=0
 for HOST in $ALL_HOSTS; do
@@ -42,6 +44,8 @@ done
 for pid in ${pids[*]}; do
 	wait $pid
 done
+ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "mkdir -p /home/ubuntu/impeller-artifact/nexmark/nexmark-kafka-streams/build/libs"
+scp -q -oStrictHostKeyChecking=no /home/ubuntu/impeller-artifact/nexmark/nexmark-kafka-streams/build/libs/nexmark-kafka-streams-0.2-SNAPSHOT-uber.jar $CLIENT_HOST:/home/ubuntu/impeller-artifact/nexmark/nexmark-kafka-streams/build/libs/nexmark-kafka-streams-0.2-SNAPSHOT-uber.jar
 
 i=0
 for HOST in $ALL_HOSTS; do
@@ -54,6 +58,8 @@ done
 for pid in ${pids[*]}; do
 	wait $pid
 done
+ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- mkdir -p /home/ubuntu/impeller-artifact/boki/bin
+scp -r -q -oStrictHostKeyChecking=no /home/ubuntu/impeller-artifact/boki/bin/release $CLIENT_HOST:/home/ubuntu/impeller-artifact/boki/bin
 
 i=0
 for HOST in $ALL_HOSTS; do
@@ -65,3 +71,4 @@ done
 for pid in ${pids[*]}; do
 	wait $pid
 done
+scp -r -q -oStrictHostKeyChecking=no /home/ubuntu/impeller-artifact/impeller/bin $CLIENT_HOST:/home/ubuntu/impeller-artifact/impeller
