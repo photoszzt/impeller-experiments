@@ -38,6 +38,6 @@ for ((idx = 0; idx < ${#TPS_PER_WORKER[@]}; ++idx)); do
 done
 cd -
 
-# cd "$DIR"
-# $HELPER_SCRIPT stop-machines
-# cd "$SCRIPT_DIR"
+cd "$DIR"
+$HELPER_SCRIPT stop-machines
+cd "$SCRIPT_DIR"

@@ -19,7 +19,7 @@ FLUSH_MS=100
 SRC_FLUSH_MS=100
 SNAPSHOT_S=10
 COMM_EVERY_MS=100
-modes=(align_chkpt epoch 2pc none)
+modes=(align_chkpt epoch remote_2pc none)
 
 cd ${DIR}
 for ((idx = 0; idx < ${#TPS_PER_WORKER[@]}; ++idx)); do
