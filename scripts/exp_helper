@@ -39,6 +39,18 @@ def run_remote_command(ssh_str, cmd):
         raise Exception('Failed to run remote command: ' + ' '.join(cmd) + '\n' + ret.stderr)
     return ret.stdout, ret.stderr
 
+def copy_remote_to_local(ssh_str, remote_path, local_path):
+    ret = sp.run(['scp', '-q', '-r', f"{ssh_str}:{remote_path}", local_path], encoding='utf8')
+    if ret.returncode != 0:
+        raise Exception(f'Failed to copy from {ssh_str}:{remote_path} to {local_path}')       
+
+def run_local_command(cmd):
+    # print(" ".join(cmd))
+    ret = sp.run(cmd, stdout=sp.PIPE, stderr=sp.PIPE, encoding='utf8')
+    if ret.returncode != 0:
+        raise Exception('Failed to run local command: ' + ' '.join(cmd) + '\n' + ret.stderr)
+    return ret.stdout, ret.stderr
+
 def start_ec2_instance(name, instance_type, security_group_id, instance_role):
     launch_args = [
         '--image-id', AMI_ID,
