@@ -173,6 +173,7 @@ WORKSPACE_DIR=$(realpath $SCRIPT_DIR/../../)
 MANAGER_HOST=$($HELPER_SCRIPT get-docker-manager-host --base-dir=$BASE_DIR)
 CLIENT_HOST=$($HELPER_SCRIPT get-client-host --base-dir=$BASE_DIR)
 
+scp -q $BASE_DIR/docker-stack-wait.sh $MANAGER_HOST:~
 scp -q $BASE_DIR/docker-compose-base.yml $MANAGER_HOST:~
 $HELPER_SCRIPT generate-docker-compose --base-dir=$BASE_DIR
 scp -q $BASE_DIR/docker-compose.yml $MANAGER_HOST:~
@@ -186,7 +187,6 @@ for ((i = 0; i < $NUM_INSTANCE; i++)); do
 	ssh -q $MANAGER_HOST -- docker service rm "kstreams-test_nexmark-${i}" || true
 done
 ssh -q $MANAGER_HOST -- docker stack rm kstreams-test || true
-
 sleep 40
 
 ALL_BROKER_HOSTS=$($HELPER_SCRIPT get-machine-with-label --machine-label=broker_node)
@@ -206,7 +206,8 @@ done
 ssh -q $MANAGER_HOST -oStrictHostKeyChecking=no -- docker network rm kstreams-test_default || true
 ssh -q $MANAGER_HOST -oStrictHostKeyChecking=no -- docker stack deploy \
 	-c ~/docker-compose-base.yml -c ~/docker-compose.yml kstreams-test
-sleep 40
+ssh -q $MANAGER_HOST -oStrictHostKeyChecking=no -- ./docker-stack-wait.sh kstreams-test
+sleep 25
 
 FIRST_BROKER_CONTAINER_IP=""
 for HOST in ${ALL_BROKER_HOSTS[@]}; do
