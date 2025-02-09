@@ -1,6 +1,14 @@
 # Impeller benchmark
 This repository holds the benchmark for Impeller. 
 
+### Structure of this repository ###
+* `nexmark_impeller`: scripts to run experiments on Impeller
+* `nexmark_impeller`: scripts to run experiments on Kafka Streams
+* `latency`: benchmark tool to parse the logs
+* `lat_tp`: microbenchmarks
+* `scripts`: scripts to setup AWS controller machine and launch experiment EC2 instances
+* `kafka_entry`: script to launch Kafka
+
 ### Experiment tool
 - latency
 ```bash
