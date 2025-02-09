@@ -5,7 +5,7 @@ DIR="$SCRIPT_DIR/q1"
 
 cd "$DIR"
 HELPER_SCRIPT=$(realpath $SCRIPT_DIR/../scripts/exp_helper)
-$HELPER_SCRIPT start-machines --use-spot-instances
+$HELPER_SCRIPT start-machines
 ./setup_machine.sh
 cd "$SCRIPT_DIR"
 
