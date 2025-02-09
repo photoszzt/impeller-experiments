@@ -27,4 +27,4 @@ services:
       KAFKA_MIN_INSYNC_REPLICAS: 3
     volumes:
       - /mnt/storage/kdata:/var/lib/kafka/data
-      - /home/ubuntu/impeller-artifacts/impeller-experiments/kafka_entry/run:/etc/confluent/docker/run
+      - /home/ubuntu/impeller-artifact/impeller-experiments/kafka_entry/run:/etc/confluent/docker/run
