@@ -12,25 +12,25 @@ cd ./latency && cargo build --release
 #### Example command
 - run query 1 for 60 seconds with 1 iterations
   ```bash
-  cd ./impeller-experiments/nexmark_impeller/ && ./run_q1_quick.sh && cd -
+  cd ./nexmark_impeller/ && ./run_q1_quick.sh && cd -
   ```
 
 #### Rerun experiments that produce figure 7
 - experiments on Impeller 
   ```bash
-  cd ./impeller-experiments/nexmark_impeller/
+  cd ./nexmark_impeller/
   # run ./run_q1.sh to ./run_q8.sh
   ```
 - experiments on Kafka Streams
   ```bash
-  cd ./impeller-experiments/nexmark_kafka-streams
+  cd ./nexmark_kafka-streams
   # run ./run_q1.sh to ./run_q8.sh
   ```
 Serially execute these scripts are estimated to take 6300 mins. 
 
 #### Rerun experiments that produce figure 8
   ```bash
-  cd ./impeller-experiments/nexmark_impeller/
+  cd ./nexmark_impeller/
   # run ./run_q1_commit_interval.sh to ./run_q8_commit_interval.sh
   ```
 Serially execute these scripts are estimated to take 1600 mins. 
