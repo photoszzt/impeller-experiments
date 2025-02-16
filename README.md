@@ -84,8 +84,25 @@ latency scan --prefix q7JoinMaxBid --suffix .json.gz --output $output_dir $q7_ex
 latency scan --prefix q8JoinStream --suffix .json.gz --output $output_dir $q8_exp_dir
 ```
 
+#### Collect result for 10ms, 25ms and 50ms for figure 8
+```bash
+# Impeller
+# for example, query 1, for the other query, use q2 to q8
+f=10 # or 25 or 50
+python3 parse_e2e_latency.py \
+        	--dir $q1_exp_dir \
+        	--out_stats $out_dir/epoch/${f}ms/ --app q1 --target epoch
+
+# Kafka Streams transaction on Impeller
+python3 parse_e2e_latency.py \
+        	--dir $q1_exp_dir \
+        	--out_stats $out_dir/remote_2pc/${f}ms/ --app q1 --target remote_2pc
+```
+
 ### Paper
+```
 Impeller: Stream Processing on Shared Logs
+```
 
 ### License
 Impeller benchmark follows the Apache License 2.0
