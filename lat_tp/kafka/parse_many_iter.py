@@ -3,6 +3,7 @@ import os
 from statistics import quantiles
 from parse_ptoc_lat import parse_file
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dir", type=str, required=True)
@@ -10,7 +11,6 @@ def main():
     args = parser.parse_args()
     all_time = []
     for i in range(args.num):
-        dirpath = os.path.join(args.dir, str(i))
         for root, dirs, files in os.walk(args.dir):
             for fname in files:
                 if "consume" in fname and "stderr" in fname:
@@ -23,5 +23,5 @@ def main():
     print(f"p50: {p50} us, p99: {p99} us")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

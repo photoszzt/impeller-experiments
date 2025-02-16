@@ -19,8 +19,6 @@ services:
     hostname: broker-{{.Task.Slot}}
     depends_on:
       - zookeeper
-        # - zookeeper-1
-        # - zookeeper-2
     environment:
       KAFKA_BROKER_ID: '{{.Task.Slot}}'
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
