@@ -1,7 +1,7 @@
 #!/bin/bash
 set -x
 HELPER_SCRIPT=$(realpath $SCRIPT_DIR/../../scripts/exp_helper)
-$HELPER_SCRIPT start-machines --use-spot-instances
+$HELPER_SCRIPT start-machines
 
 TPS=(10 50 100)
 DURATION=180
