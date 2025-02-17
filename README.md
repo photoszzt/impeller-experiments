@@ -24,6 +24,7 @@ cd ./latency && cargo build --release
   ```
 
 #### Rerun experiments that produce figure 7
+- Artifact evaluator: Skip this step
 - experiments on Impeller 
   ```bash
   cd ./nexmark_impeller/
@@ -37,6 +38,7 @@ cd ./latency && cargo build --release
 Serially execute these scripts are estimated to take 6300 mins. 
 
 #### Rerun experiments that produce figure 8
+- Artifact evaluator: Skip this step
   ```bash
   cd ./nexmark_impeller/
   # run ./run_q1_commit_interval.sh to ./run_q8_commit_interval.sh
