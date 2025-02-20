@@ -67,6 +67,33 @@ rtcsync
 makestep 1 3
 EOF
 
+pids=()
+i=0
+for HOST in $ALL_HOSTS; do
+	SSH_CMD="ssh -q $HOST -oStrictHostKeyChecking=no"
+	$SSH_CMD -- "sudo systemctl stop unattended-upgrades" &
+	pids[$i]=$!
+	i=$((i + 1))
+done
+for pid in ${pids[*]}; do
+	wait $pid
+done
+
+pids=()
+i=0
+for HOST in $ALL_HOSTS; do
+	SSH_CMD="ssh -q $HOST -oStrictHostKeyChecking=no"
+	$SSH_CMD -- "sudo apt-get -y purge unattended-upgrades" &
+	pids[$i]=$!
+	i=$((i + 1))
+done
+for pid in ${pids[*]}; do
+	wait $pid
+done
+ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "sudo systemctl stop unattended-upgrades"
+ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "sudo apt-get -y purge unattended-upgrades"
+
+pids=()
 i=0
 for HOST in $ALL_HOSTS; do
 	SSH_CMD="ssh -q $HOST -oStrictHostKeyChecking=no"
@@ -74,7 +101,7 @@ for HOST in $ALL_HOSTS; do
 	$SSH_CMD -- "[ -d /home/ubuntu/impeller-artifact ] || git clone --recurse-submodules -j8 https://github.com/ut-osa/impeller-artifact.git /home/ubuntu/impeller-artifact" &
 	pids[$i]=$!
 	i=$((i + 1))
-	$SSH_CMD -- "sudo apt-get update && sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin jq" &
+	$SSH_CMD -- "sudo apt-get update && sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin jq chrony" &
 	pids[$i]=$!
 	i=$((i + 1))
 done
@@ -82,27 +109,27 @@ for pid in ${pids[*]}; do
 	wait $pid
 done
 ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "[ -d /home/ubuntu/impeller-artifact ] || git clone --recurse-submodules -j8 https://github.com/ut-osa/impeller-artifact.git /home/ubuntu/impeller-artifact"
+ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "sudo apt-get -y install chrony"
 
 for HOST in $ALL_HOSTS; do
 	SSH_CMD="ssh -q $HOST -oStrictHostKeyChecking=no"
-	$SSH_CMD -- "sudo apt-get -y install chrony"
-	scp -oStrictHostKeyChecking=no /tmp/chrony.conf $HOST:/home/ubuntu/chrony.conf
+	scp -oStrictHostKeyChecking=no /tmp/chrony.conf "$HOST:/home/ubuntu/chrony.conf"
         $SSH_CMD -- "sudo mv /home/ubuntu/chrony.conf /etc/chrony/chrony.conf"
 	$SSH_CMD -- "sudo /etc/init.d/chrony restart"
-	$SSH_CMD -- "sleep 20"
+	$SSH_CMD -- "sleep 10"
 	$SSH_CMD -- "sudo systemctl status chrony"
 	$SSH_CMD -- "chronyc sources -v"
 	$SSH_CMD -- "chronyc tracking"
 done
-ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "sudo apt-get -y install chrony"
-scp -oStrictHostKeyChecking=no /tmp/chrony.conf $CLIENT_HOST:/home/ubuntu/chrony.conf
+scp -oStrictHostKeyChecking=no "/tmp/chrony.conf" "$CLIENT_HOST:/home/ubuntu/chrony.conf"
 ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "sudo mv /home/ubuntu/chrony.conf /etc/chrony/chrony.conf"
 ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "sudo /etc/init.d/chrony restart"
-ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "sleep 20"
+ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "sleep 10"
 ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "sudo systemctl status chrony"
 ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "chronyc sources -v"
 ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "chronyc tracking"
 
+pids=()
 i=0
 for HOST in $ALL_HOSTS; do
 	SSH_CMD="ssh -q $HOST -oStrictHostKeyChecking=no"
@@ -117,6 +144,7 @@ done
 ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "mkdir -p /home/ubuntu/impeller-artifact/nexmark/nexmark-kafka-streams/build/libs"
 scp -q -oStrictHostKeyChecking=no /home/ubuntu/impeller-artifact/nexmark/nexmark-kafka-streams/build/libs/nexmark-kafka-streams-0.2-SNAPSHOT-uber.jar $CLIENT_HOST:/home/ubuntu/impeller-artifact/nexmark/nexmark-kafka-streams/build/libs/nexmark-kafka-streams-0.2-SNAPSHOT-uber.jar
 
+pids=()
 i=0
 for HOST in $ALL_HOSTS; do
 	SSH_CMD="ssh -q $HOST -oStrictHostKeyChecking=no"
@@ -131,6 +159,7 @@ done
 ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- mkdir -p /home/ubuntu/impeller-artifact/boki/bin
 scp -r -q -oStrictHostKeyChecking=no /home/ubuntu/impeller-artifact/boki/bin/release $CLIENT_HOST:/home/ubuntu/impeller-artifact/boki/bin
 
+pids=()
 i=0
 for HOST in $ALL_HOSTS; do
 	SSH_CMD="ssh -q $HOST -oStrictHostKeyChecking=no"
