@@ -116,18 +116,14 @@ for HOST in $ALL_HOSTS; do
 	scp -oStrictHostKeyChecking=no /tmp/chrony.conf "$HOST:/home/ubuntu/chrony.conf"
         $SSH_CMD -- "sudo mv /home/ubuntu/chrony.conf /etc/chrony/chrony.conf"
 	$SSH_CMD -- "sudo /etc/init.d/chrony restart"
-	$SSH_CMD -- "sleep 10"
+done
+sleep 20
+for HOST in $ALL_HOSTS; do
+	SSH_CMD="ssh -q $HOST -oStrictHostKeyChecking=no"
 	$SSH_CMD -- "sudo systemctl status chrony"
 	$SSH_CMD -- "chronyc sources -v"
 	$SSH_CMD -- "chronyc tracking"
 done
-scp -oStrictHostKeyChecking=no "/tmp/chrony.conf" "$CLIENT_HOST:/home/ubuntu/chrony.conf"
-ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "sudo mv /home/ubuntu/chrony.conf /etc/chrony/chrony.conf"
-ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "sudo /etc/init.d/chrony restart"
-ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "sleep 10"
-ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "sudo systemctl status chrony"
-ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "chronyc sources -v"
-ssh -q -oStrictHostKeyChecking=no $CLIENT_HOST -- "chronyc tracking"
 
 pids=()
 i=0

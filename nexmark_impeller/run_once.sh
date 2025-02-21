@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 if [ "$1" = "" ]; then
 	echo "should provide exp_dir"
 	exit 1

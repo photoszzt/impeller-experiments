@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 SOURCE=${BASH_SOURCE[0]}
 while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
 	DIR=$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)
@@ -62,8 +63,8 @@ for HOST in $ALL_STORAGE_HOSTS; do
 	$SSH_CMD -- 'for ((i=1; i <=8; i++)); do sudo mkdir -p /mnt/storage/redis/$i; done'
 done
 
-ssh -q $MANAGER_HOST -- docker network rm faas-test_default
+ssh -q $MANAGER_HOST -- docker network rm faas-test_default || true
 ssh -q $MANAGER_HOST -- SRC_DIR=$SRC_DIR FAAS_DIR=$FAAS_DIR EXP_DIR=$EXP_DIR USE_CACHE=${USE_CACHE} FAAS_BUILD_TYPE=$FAAS_BUILD_TYPE \
 	docker stack deploy -c ~/common.yml -c ~/docker-compose-base.yml -c ~/docker-compose.yml faas-test
 ssh -q $MANAGER_HOST -- ./docker-stack-wait.sh faas-test
-sleep 25
+sleep 40
