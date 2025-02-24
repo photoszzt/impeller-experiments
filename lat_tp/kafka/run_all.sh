@@ -2,6 +2,7 @@
 set -x
 HELPER_SCRIPT=$(realpath $SCRIPT_DIR/../../scripts/exp_helper)
 $HELPER_SCRIPT start-machines
+./setup_machine.sh
 
 TPS=(10 50 100)
 DURATION=180
