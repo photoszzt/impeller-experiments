@@ -1,11 +1,17 @@
 import csv
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
 import subprocess
 import sys
 import os
 import numpy as np
 from string import ascii_lowercase
+
+import matplotlib
+
+matplotlib.rcParams["pdf.fonttype"] = 42
+matplotlib.rcParams["ps.fonttype"] = 42
+
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 
 current = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(current)

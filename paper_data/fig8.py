@@ -2,9 +2,14 @@ import json
 import os
 import sys
 import numpy as np
-import matplotlib.pyplot as plt
 import subprocess
 import csv
+import matplotlib
+
+matplotlib.rcParams["pdf.fonttype"] = 42
+matplotlib.rcParams["ps.fonttype"] = 42
+
+import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
 current = os.path.dirname(os.path.realpath(__file__))
